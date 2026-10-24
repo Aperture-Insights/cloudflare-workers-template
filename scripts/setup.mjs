@@ -3,6 +3,8 @@ import { createInterface } from "node:readline/promises";
 import {
   TEMPLATE_SLUG,
   generatePassword,
+  getEnvValue,
+  getSiteTitle,
   isValidSlug,
   parseJsonc,
   setJsoncString,
@@ -60,14 +62,18 @@ try {
     else break;
   }
   wrangler = setJsoncString(wrangler, "name", slug);
-  const pkg = JSON.parse(readText("package.json"));
-  pkg.name = slug;
-  writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
 
-  // 2. Site title
+  // 2. Site title (existing title is the default; files are written after all prompts)
+  /** @type {string | undefined} */
+  let siteConfig;
   if (existsSync("src/site.config.ts")) {
-    const title = await ask("Site title:", titleCase(slug));
-    writeFileSync("src/site.config.ts", setSiteTitle(readText("src/site.config.ts"), title));
+    const src = readText("src/site.config.ts");
+    const title = await ask("Site title:", getSiteTitle(src) ?? titleCase(slug));
+    siteConfig = setSiteTitle(src, title);
+    if (getSiteTitle(src) === undefined) {
+      console.log("  Warning: no `title: \"...\"` line found in src/site.config.ts; title not changed.");
+      siteConfig = undefined;
+    }
   } else {
     console.log("Site title: skipped (no src/site.config.ts)");
   }
@@ -83,12 +89,16 @@ try {
   }
 
   // 4. Account ID
+  const existingId = parseJsonc(wrangler).account_id;
   /** @type {string} */
   let accountId = "";
-  if (who.accounts.length === 1) {
+  if (typeof existingId === "string" && ID_RE.test(existingId)) {
+    if (await confirm(`Keep existing account_id ${existingId}?`)) accountId = existingId;
+  }
+  if (!accountId && who.accounts.length === 1) {
     const a = who.accounts[0];
     if (await confirm(`Use Cloudflare account "${a.name ?? a.id}" (${a.id})?`)) accountId = a.id;
-  } else if (who.accounts.length > 1) {
+  } else if (!accountId && who.accounts.length > 1) {
     who.accounts.forEach((a, i) => console.log(`  ${i + 1}) ${a.name ?? a.id} (${a.id})`));
     for (;;) {
       const n = parseInt(await ask("Pick an account number (blank to enter an ID manually):"), 10);
@@ -101,17 +111,35 @@ try {
     }
   }
   while (!accountId) {
-    const entered = (await ask("Cloudflare account ID (32 hex characters):")).toLowerCase();
+    const entered = (await ask("Cloudflare account ID (32 hex characters):", typeof existingId === "string" && ID_RE.test(existingId) ? existingId : undefined)).toLowerCase();
     if (ID_RE.test(entered)) accountId = entered;
     else console.log("  Must be 32 lowercase hex characters.");
   }
   wrangler = setJsoncString(wrangler, "account_id", accountId);
-  writeFileSync("wrangler.jsonc", wrangler);
 
   // 5. Staging password
-  const typed = (await ask("Staging password (Enter to generate one):")).trim();
-  const generated = !typed;
-  const password = typed || generatePassword();
+  const existingPw = existsSync(".dev.vars.staging")
+    ? getEnvValue(readText(".dev.vars.staging"), "STAGING_PASSWORD")
+    : undefined;
+  let password = "";
+  let generated = false;
+  if (existingPw && (await confirm("Keep the existing staging password from .dev.vars.staging?"))) {
+    password = existingPw;
+  } else {
+    const typed = (await ask("Staging password (Enter to generate one):")).trim();
+    generated = !typed;
+    password = typed || generatePassword();
+  }
+  const upload = await confirm(
+    "Upload it to Cloudflare after saving (wrangler secret put STAGING_PASSWORD --env staging)?",
+  );
+
+  // All prompts done: write everything in one place.
+  const pkg = JSON.parse(readText("package.json"));
+  pkg.name = slug;
+  writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+  writeFileSync("wrangler.jsonc", wrangler);
+  if (siteConfig !== undefined) writeFileSync("src/site.config.ts", siteConfig);
   writeFileSync(".dev.vars.staging", `STAGING_PASSWORD=${password}\n`, { mode: 0o600 });
   console.log("Wrote .dev.vars.staging (git-ignored).");
   if (generated) {
@@ -119,7 +147,7 @@ try {
     console.log("Store it in a password manager; it is not shown again.");
   }
   let uploaded = false;
-  if (await confirm("Upload it to Cloudflare now (wrangler secret put STAGING_PASSWORD --env staging)?")) {
+  if (upload) {
     const r = await run("npx", ["wrangler", "secret", "put", "STAGING_PASSWORD", "--env", "staging"], {
       input: password,
     });

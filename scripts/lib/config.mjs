@@ -114,3 +114,31 @@ export function generatePassword() {
 export function setSiteTitle(text, title) {
   return text.replace(/^([ \t]*title\s*:\s*).*$/m, (_m, p1) => `${p1}${JSON.stringify(title)},`);
 }
+
+/**
+ * Current value of the `title: "…"` line, or undefined when absent.
+ * @param {string} text
+ * @returns {string | undefined}
+ */
+export function getSiteTitle(text) {
+  const m = /^[ \t]*title\s*:\s*("(?:[^"\\]|\\.)*")/m.exec(text);
+  if (!m) return undefined;
+  try {
+    return JSON.parse(m[1]);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Value of `KEY=value` in dotenv text, or undefined when missing or empty.
+ * @param {string} text @param {string} key
+ * @returns {string | undefined}
+ */
+export function getEnvValue(text, key) {
+  for (const line of text.split(/\r?\n/)) {
+    const i = line.indexOf("=");
+    if (i > 0 && line.slice(0, i).trim() === key) return line.slice(i + 1).trim() || undefined;
+  }
+  return undefined;
+}

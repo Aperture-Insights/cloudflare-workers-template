@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   TEMPLATE_SLUG,
   generatePassword,
+  getEnvValue,
+  getSiteTitle,
   setSiteTitle,
   isValidSlug,
   meetsNodeFloor,
@@ -76,5 +78,29 @@ describe("setSiteTitle", () => {
     expect(out).toContain('  title: "Acme \\"Co\\"",');
     expect(out).toContain('description: "d"');
     expect(out).not.toContain("Old");
+  });
+});
+
+describe("getSiteTitle", () => {
+  it("reads the current title, round-tripping setSiteTitle", () => {
+    const src = setSiteTitle('export const SITE = {\n  title: "Old",\n};', 'Acme "Co"');
+    expect(getSiteTitle(src)).toBe('Acme "Co"');
+  });
+  it("returns undefined when there is no title line", () => {
+    expect(getSiteTitle("export const SITE = {};")).toBeUndefined();
+  });
+  it("setSiteTitle leaves text unchanged on no match", () => {
+    const src = "export const SITE = {};";
+    expect(setSiteTitle(src, "X")).toBe(src);
+  });
+});
+
+describe("getEnvValue", () => {
+  it("reads a key's value", () => {
+    expect(getEnvValue("A=1\nSTAGING_PASSWORD=abc_-9\n", "STAGING_PASSWORD")).toBe("abc_-9");
+  });
+  it("returns undefined when missing or empty", () => {
+    expect(getEnvValue("A=1\n", "STAGING_PASSWORD")).toBeUndefined();
+    expect(getEnvValue("STAGING_PASSWORD=\n", "STAGING_PASSWORD")).toBeUndefined();
   });
 });
