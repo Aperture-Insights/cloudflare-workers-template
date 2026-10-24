@@ -1,5 +1,33 @@
 {
+  "$schema": "node_modules/wrangler/config-schema.json",
   "name": "cloudflare-website-template",
+  // Never deploy the top-level Worker: always pass --env staging or --env production.
   "main": "worker/index.ts",
-  "compatibility_date": "2026-10-19"
+  "compatibility_date": "2026-10-19",
+  "preview_urls": false,
+  "env": {
+    "staging": {
+      "workers_dev": true,
+      "assets": {
+        "directory": "./dist",
+        "binding": "ASSETS",
+        "not_found_handling": "404-page",
+        // Every request goes through the password check.
+        "run_worker_first": true
+      },
+      "vars": { "AUTH_MODE": "password", "AUTH_SESSION_HOURS": "168" },
+      "secrets": { "required": ["STAGING_PASSWORD"] }
+    },
+    "production": {
+      "workers_dev": true,
+      "assets": {
+        "directory": "./dist",
+        "binding": "ASSETS",
+        "not_found_handling": "404-page",
+        // Only so the login override and its files are never served publicly.
+        "run_worker_first": ["/__auth/*"]
+      },
+      "vars": { "AUTH_MODE": "off" }
+    }
+  }
 }

@@ -8,6 +8,8 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
+    "preview": "npm run build && wrangler dev --env production",
+    "preview:staging": "npm run build && wrangler dev --env staging",
     "test": "vitest run",
     "check:worker": "tsc -p worker/tsconfig.json",
     "types": "wrangler types worker/worker-configuration.d.ts --include-env=false"
