@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { escapeHtml } from "../auth";
 import { renderLogin } from "../login";
 
 function fakeEnv(status: number, body = "") {
@@ -56,5 +57,11 @@ describe("renderLogin", () => {
     expect(res.status).toBe(401);
     expect(res.headers.get("Cache-Control")).toBe("no-store");
     expect(res.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
+  });
+
+  it.each(["{{ERROR}}", "/{{ERROR}}", "$&", "$1$`"])("treats next %j as inert text", async (next) => {
+    const { env } = fakeEnv(200, "[{{NEXT}}][{{ERROR}}]");
+    const body = await (await renderLogin(env, origin, { next, error: true }, 200)).text();
+    expect(body).toBe(`[${escapeHtml(next)}][Incorrect password.]`);
   });
 });

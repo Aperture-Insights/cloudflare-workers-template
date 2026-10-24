@@ -17,7 +17,7 @@ export async function renderLogin(
   }
   const next = escapeHtml(opts.next);
   const error = opts.error ? escapeHtml("Incorrect password.") : "";
-  const body = template.split("{{NEXT}}").join(next).split("{{ERROR}}").join(error);
+  const body = template.replace(/\{\{(NEXT|ERROR)\}\}/g, (_, k: string) => (k === "NEXT" ? next : error));
   return new Response(body, {
     status,
     headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
