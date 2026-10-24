@@ -11,12 +11,15 @@
     "preview": "npm run build && wrangler dev --env production",
     "preview:staging": "npm run build && wrangler dev --env staging",
     "test": "vitest run",
-    "check:worker": "tsc -p worker/tsconfig.json",
+    "check:worker": "tsc -p worker/tsconfig.json && tsc -p scripts/jsconfig.json",
+    "publish:staging": "node scripts/publish.mjs staging",
+    "publish:production": "node scripts/publish.mjs production",
     "types": "wrangler types worker/worker-configuration.d.ts --include-env=false"
   },
   "devDependencies": {
     "@astrojs/check": "0.9.12",
     "@cloudflare/vitest-plugin": "1.4.7",
+    "@types/node": "26.6.5",
     "astro": "7.4.2",
     "typescript": "6.0.3",
     "vitest": "5.0.5",
