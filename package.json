@@ -7,7 +7,10 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build"
+    "build": "astro build",
+    "test": "vitest run",
+    "check:worker": "tsc -p worker/tsconfig.json",
+    "types": "wrangler types worker/worker-configuration.d.ts --include-env=false"
   },
   "devDependencies": {
     "@astrojs/check": "0.9.12",
