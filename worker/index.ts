@@ -114,7 +114,9 @@ async function handleStaging(request: Request, env: Env, password: string): Prom
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    if (env.AUTH_MODE !== "password") {
+    // Fail closed: only an exact "off" is production. Anything else (missing, empty,
+    // mistyped) takes the staging path, so a misconfigured staging stays locked.
+    if (env.AUTH_MODE === "off") {
       // Production: the Worker only runs for /__auth/* and non-navigation asset misses.
       if (new URL(request.url).pathname.startsWith(AUTH_PREFIX)) {
         return new Response("Not found", { status: 404 });

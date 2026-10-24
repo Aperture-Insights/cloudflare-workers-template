@@ -74,10 +74,37 @@ describe("production (AUTH_MODE off)", () => {
     expect(await res.text()).not.toContain("asset:");
   });
 
-  it("treats a missing AUTH_MODE as production", async () => {
-    const res = await worker.fetch(req("/"), { ASSETS: fakeAssets() } as Env);
-    expect(await res.text()).toBe("asset:/");
-  });
+});
+
+describe("AUTH_MODE other than \"off\" fails closed (staging path)", () => {
+  const modes: Array<[string, string | undefined]> = [
+    ["missing", undefined],
+    ["empty", ""],
+    ["mistyped", "Off"],
+    ["unknown", "public"],
+  ];
+  for (const [label, mode] of modes) {
+    it(`${label} AUTH_MODE without a password responds 503`, async () => {
+      const env = { ASSETS: fakeAssets(), ...(mode === undefined ? {} : { AUTH_MODE: mode }) } as Env;
+      const res = await worker.fetch(req("/"), env);
+      expect(res.status).toBe(503);
+      expect(await res.text()).toBe("Staging password not configured.");
+      expect(res.headers.get("X-Robots-Tag")).toBe(NOINDEX);
+    });
+
+    it(`${label} AUTH_MODE with a password responds 401 login`, async () => {
+      const env = {
+        ASSETS: fakeAssets(),
+        STAGING_PASSWORD: PW,
+        ...(mode === undefined ? {} : { AUTH_MODE: mode }),
+      } as Env;
+      const res = await worker.fetch(req("/"), env);
+      expect(res.status).toBe(401);
+      const body = await res.text();
+      expect(body).toContain('action="/__auth/login"');
+      expect(body).not.toContain("asset:");
+    });
+  }
 });
 
 describe("staging: missing password", () => {
@@ -241,6 +268,9 @@ async function validCookie(): Promise<string> {
 }
 
 describe("staging: public /__auth/ assets reject encoded or traversal paths", () => {
+  // Note: "/__auth/%2e%2e/docs" never reaches the isPlainAuthAssetPath guard: the URL parser
+  // normalises %2e%2e to ".." and resolves it, so the Worker sees "/docs". It still responds
+  // 401 (a gated content path). Kept as a regression guard for that normalisation.
   for (const path of ["/__auth/..%2Fdocs", "/__auth/%2e%2e/docs", "/__auth/a%2Fb", "/__auth/a%5Cb", "/__auth/a//b"]) {
     it(`${path} without a session responds 401 login`, async () => {
       const res = await worker.fetch(req(path), stagingEnv());
