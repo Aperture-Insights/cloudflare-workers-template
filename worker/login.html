@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Password required</title>
+<style>
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;background:#f4f4f5;color:#18181b}
+  .card{background:#fff;padding:2rem;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.15);width:100%;max-width:320px;margin:1rem}
+  h1{font-size:1.25rem;margin:0 0 1rem}
+  input,button{width:100%;box-sizing:border-box;padding:.6rem;font:inherit;margin-bottom:.75rem}
+  .error{color:#b91c1c;margin:0 0 .75rem}
+  .error:empty{display:none}
+</style>
+</head>
+<body>
+<main class="card">
+  <h1>Password required</h1>
+  <form method="POST" action="/__auth/login">
+    <input type="password" name="password" autocomplete="current-password" required autofocus>
+    <input type="hidden" name="next" value="{{NEXT}}">
+    <p class="error" role="alert">{{ERROR}}</p>
+    <button type="submit">Continue</button>
+  </form>
+</main>
+</body>
+</html>
