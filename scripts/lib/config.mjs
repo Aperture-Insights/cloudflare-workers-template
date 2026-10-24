@@ -168,3 +168,30 @@ export function getEnvValue(text, key) {
   }
   return undefined;
 }
+
+/**
+ * Renames the project in package-lock.json text (top-level `name` and `packages[""].name`).
+ * @param {string} text
+ * @param {string} slug
+ * @returns {string}
+ */
+export function renamePackageLock(text, slug) {
+  const lock = JSON.parse(text);
+  lock.name = slug;
+  if (lock.packages && typeof lock.packages[""] === "object" && lock.packages[""] !== null) {
+    lock.packages[""].name = slug;
+  }
+  return JSON.stringify(lock, null, 2) + "\n";
+}
+
+export const MIN_PASSWORD_LENGTH = 16;
+export const SHORT_PASSWORD_WARNING =
+  "Passwords shorter than 16 characters can be guessed from a leaked session cookie. Use the generated one or a longer passphrase.";
+
+/**
+ * True when a typed staging password is shorter than MIN_PASSWORD_LENGTH characters.
+ * @param {string} password
+ */
+export function isShortPassword(password) {
+  return [...password].length < MIN_PASSWORD_LENGTH;
+}

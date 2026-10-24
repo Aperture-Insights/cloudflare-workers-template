@@ -1,13 +1,16 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import {
+  SHORT_PASSWORD_WARNING,
   TEMPLATE_SLUG,
   generatePassword,
   generatedPasswordMessage,
   getEnvValue,
   getSiteTitle,
+  isShortPassword,
   isValidSlug,
   parseJsonc,
+  renamePackageLock,
   setJsoncString,
   setSiteTitle,
   writeOwnerOnly,
@@ -128,9 +131,16 @@ try {
   if (existingPw && (await confirm("Keep the existing staging password from .dev.vars.staging?"))) {
     password = existingPw;
   } else {
-    const typed = (await ask("Staging password (Enter to generate one):")).trim();
-    generated = !typed;
-    password = typed || generatePassword();
+    for (;;) {
+      const typed = (await ask("Staging password (Enter to generate one):")).trim();
+      if (typed && isShortPassword(typed)) {
+        console.log(`  ${SHORT_PASSWORD_WARNING}`);
+        if (!(await confirm("Use this short password anyway?", false))) continue;
+      }
+      generated = !typed;
+      password = typed || generatePassword();
+      break;
+    }
   }
   const upload = await confirm(
     "Upload it to Cloudflare after saving (wrangler secret put STAGING_PASSWORD --env staging)?",
@@ -140,6 +150,9 @@ try {
   const pkg = JSON.parse(readText("package.json"));
   pkg.name = slug;
   writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+  if (existsSync("package-lock.json")) {
+    writeFileSync("package-lock.json", renamePackageLock(readText("package-lock.json"), slug));
+  }
   writeFileSync("wrangler.jsonc", wrangler);
   if (siteConfig !== undefined) writeFileSync("src/site.config.ts", siteConfig);
   writeOwnerOnly(".dev.vars.staging", `STAGING_PASSWORD=${password}\n`);
