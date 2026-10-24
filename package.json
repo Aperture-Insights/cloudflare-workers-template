@@ -12,6 +12,7 @@
     "preview:staging": "npm run build && wrangler dev --env staging",
     "test": "vitest run",
     "check:worker": "tsc -p worker/tsconfig.json && tsc -p scripts/jsconfig.json",
+    "setup": "node scripts/setup.mjs",
     "publish:staging": "node scripts/publish.mjs staging",
     "publish:production": "node scripts/publish.mjs production",
     "types": "wrangler types worker/worker-configuration.d.ts --include-env=false"

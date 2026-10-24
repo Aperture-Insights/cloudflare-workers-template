@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -99,4 +100,17 @@ export function meetsNodeFloor(version, floor = "26.0.0") {
     if (d !== 0) return d > 0;
   }
   return true;
+}
+
+/** 24 URL-safe characters (18 random bytes). */
+export function generatePassword() {
+  return randomBytes(18).toString("base64url");
+}
+
+/**
+ * Replace the `title: "…",` line in src/site.config.ts.
+ * @param {string} text @param {string} title
+ */
+export function setSiteTitle(text, title) {
+  return text.replace(/^([ \t]*title\s*:\s*).*$/m, (_m, p1) => `${p1}${JSON.stringify(title)},`);
 }

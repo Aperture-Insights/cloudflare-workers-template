@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   TEMPLATE_SLUG,
+  generatePassword,
+  setSiteTitle,
   isValidSlug,
   meetsNodeFloor,
   parseJsonc,
@@ -56,5 +58,23 @@ describe("meetsNodeFloor", () => {
     expect(meetsNodeFloor("v26.12.1")).toBe(true);
     expect(meetsNodeFloor("25.9.0")).toBe(false);
     expect(meetsNodeFloor("24.22.1")).toBe(false);
+  });
+});
+
+describe("generatePassword", () => {
+  it("is 24 url-safe characters and random", () => {
+    const a = generatePassword();
+    expect(a).toHaveLength(24);
+    expect(a).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(generatePassword()).not.toBe(a);
+  });
+});
+
+describe("setSiteTitle", () => {
+  it("replaces the title line with an escaped string", () => {
+    const out = setSiteTitle('export const SITE = {\n  title: "Old",\n  description: "d",\n};', 'Acme "Co"');
+    expect(out).toContain('  title: "Acme \\"Co\\"",');
+    expect(out).toContain('description: "d"');
+    expect(out).not.toContain("Old");
   });
 });
