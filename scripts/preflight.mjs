@@ -59,7 +59,7 @@ export async function preflight(env, deps = realDeps) {
   if (env === "staging") {
     const res = await deps.run("npx", ["wrangler", "secret", "list", "--env", "staging"], { capture: true });
     if (res.code !== 0) {
-      if (/not found/i.test(`${res.stdout}\n${res.stderr ?? ""}`)) {
+      if (/Worker ".*" not found/i.test(`${res.stdout}\n${res.stderr ?? ""}`)) {
         problems.push(
           "The staging Worker does not exist yet. Run `npm run setup`, which creates the staging Worker and sets STAGING_PASSWORD.",
         );
@@ -69,13 +69,19 @@ export async function preflight(env, deps = realDeps) {
         );
       }
     } else {
-      let names = [];
+      /** @type {string[] | null} */
+      let names = null;
       try {
-        names = JSON.parse(res.stdout).map((/** @type {{ name: string }} */ s) => s.name);
+        const list = JSON.parse(res.stdout);
+        if (Array.isArray(list)) names = list.map((/** @type {{ name?: unknown }} */ s) => String(s?.name));
       } catch {
-        // fall through: treated as missing
+        // handled below
       }
-      if (!names.includes("STAGING_PASSWORD")) {
+      if (names === null) {
+        problems.push(
+          'Could not read the staging secret list from wrangler; run "npx wrangler secret list --env staging" to check.',
+        );
+      } else if (!names.includes("STAGING_PASSWORD")) {
         problems.push("STAGING_PASSWORD is not set on the staging Worker. Run `npm run setup` or `npx wrangler secret put STAGING_PASSWORD --env staging`.");
       }
     }

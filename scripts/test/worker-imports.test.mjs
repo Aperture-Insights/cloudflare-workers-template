@@ -19,7 +19,27 @@ function workerSources(dir) {
   return out;
 }
 
-const NODE_IMPORT = /(?:from\s*|require\s*\(\s*|import\s*\(\s*)["']node:/;
+// `from "node:x"`, `require("node:x")`, `import("node:x")` and bare `import "node:x"`.
+const NODE_IMPORT = /(?:from\s*|require\s*\(\s*|import\s*\(\s*|\bimport\s*)["']node:/;
+
+describe("NODE_IMPORT pattern", () => {
+  for (const src of [
+    'import { x } from "node:fs";',
+    "const x = require('node:fs');",
+    'const x = await import("node:fs");',
+    'import "node:process";',
+    "import 'node:process';",
+    'import"node:process";',
+  ]) {
+    it(`matches ${src}`, () => {
+      expect(src).toMatch(NODE_IMPORT);
+    });
+  }
+
+  it("does not match a non-node import", () => {
+    expect('import "./auth";').not.toMatch(NODE_IMPORT);
+  });
+});
 
 describe("worker source", () => {
   const files = workerSources(workerDir);

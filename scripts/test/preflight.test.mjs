@@ -104,3 +104,43 @@ describe("preflight", () => {
     expect(msgs[0]).toContain("Node");
   });
 });
+
+describe("preflight: secret list edge cases", () => {
+  function secretRun(result) {
+    return vi.fn(async (cmd, args) =>
+      args.includes("whoami") ? { code: 0, stdout: '{"loggedIn":true}', stderr: "" } : result,
+    );
+  }
+
+  it("a generic 'not found' error is not reported as a missing Worker", async () => {
+    const { deps } = makeDeps({
+      run: secretRun({ code: 1, stdout: "", stderr: "A request to the Cloudflare API failed. Not found [code: 10007]" }),
+    });
+    const msgs = await preflight("staging", deps);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]).not.toContain("does not exist");
+    expect(msgs[0]).toContain("Could not list staging secrets");
+  });
+
+  it("matches 'Worker \"...\" not found' case-insensitively", async () => {
+    const { deps } = makeDeps({
+      run: secretRun({ code: 1, stdout: "", stderr: 'worker "acme-staging" NOT FOUND' }),
+    });
+    const msgs = await preflight("staging", deps);
+    expect(msgs[0]).toContain("does not exist");
+  });
+
+  it("unparseable secret list stdout gets its own message", async () => {
+    const { deps } = makeDeps({ run: secretRun({ code: 0, stdout: "not json", stderr: "" }) });
+    const msgs = await preflight("staging", deps);
+    expect(msgs).toEqual([
+      'Could not read the staging secret list from wrangler; run "npx wrangler secret list --env staging" to check.',
+    ]);
+  });
+
+  it("non-array JSON stdout gets the same message", async () => {
+    const { deps } = makeDeps({ run: secretRun({ code: 0, stdout: '{"a":1}', stderr: "" }) });
+    const msgs = await preflight("staging", deps);
+    expect(msgs[0]).toContain("Could not read the staging secret list");
+  });
+});

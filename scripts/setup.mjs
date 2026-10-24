@@ -3,12 +3,14 @@ import { createInterface } from "node:readline/promises";
 import {
   TEMPLATE_SLUG,
   generatePassword,
+  generatedPasswordMessage,
   getEnvValue,
   getSiteTitle,
   isValidSlug,
   parseJsonc,
   setJsoncString,
   setSiteTitle,
+  writeOwnerOnly,
 } from "./lib/config.mjs";
 import { run } from "./lib/run.mjs";
 
@@ -140,11 +142,10 @@ try {
   writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
   writeFileSync("wrangler.jsonc", wrangler);
   if (siteConfig !== undefined) writeFileSync("src/site.config.ts", siteConfig);
-  writeFileSync(".dev.vars.staging", `STAGING_PASSWORD=${password}\n`, { mode: 0o600 });
-  console.log("Wrote .dev.vars.staging (git-ignored).");
+  writeOwnerOnly(".dev.vars.staging", `STAGING_PASSWORD=${password}\n`);
+  console.log("Wrote .dev.vars.staging (git-ignored, owner-read-only).");
   if (generated) {
-    console.log(`Generated staging password: ${password}`);
-    console.log("Store it in a password manager; it is not shown again.");
+    for (const line of generatedPasswordMessage(password, process.stdout.isTTY)) console.log(line);
   }
   let uploaded = false;
   if (upload) {

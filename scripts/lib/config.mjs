@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { chmodSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const TEMPLATE_SLUG = "cloudflare-website-template";
@@ -105,6 +105,32 @@ export function meetsNodeFloor(version, floor = "26.0.0") {
 /** 24 URL-safe characters (18 random bytes). */
 export function generatePassword() {
   return randomBytes(18).toString("base64url");
+}
+
+/**
+ * Write a secrets file readable only by its owner. `mode` only applies when the
+ * file is created, so chmod afterwards to tighten a pre-existing file too.
+ * @param {string} path @param {string} content
+ */
+export function writeOwnerOnly(path, content) {
+  writeFileSync(path, content, { mode: 0o600 });
+  chmodSync(path, 0o600);
+}
+
+/**
+ * What setup prints after generating a password. The password itself is shown only
+ * on an interactive terminal, so it never lands in piped output or CI logs.
+ * @param {string} password @param {boolean | undefined} isTTY
+ * @returns {string[]}
+ */
+export function generatedPasswordMessage(password, isTTY) {
+  if (isTTY === true) {
+    return [
+      `Generated staging password: ${password}`,
+      "Store it in a password manager; it is not shown again.",
+    ];
+  }
+  return ["Generated a staging password and saved it to .dev.vars.staging (owner-read-only)."];
 }
 
 /**
