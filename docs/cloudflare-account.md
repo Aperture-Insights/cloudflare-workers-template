@@ -5,7 +5,7 @@ This template runs on Cloudflare's free plan. You need no payment method and no 
 ## 1. Create a free account
 
 1. Sign up at <https://dash.cloudflare.com/sign-up> and verify your email.
-2. In the dashboard, open **Workers & Pages** once. If Cloudflare asks you to choose a `workers.dev` subdomain, choose one. Your sites will live at `https://<worker-name>.<subdomain>.workers.dev`.
+2. In the dashboard, open **Workers & Pages** once. If Cloudflare asks you to choose a `workers.dev` subdomain, choose one. Your sites will live at `https://<worker-name>.<account-subdomain>.workers.dev`. After a publish, Wrangler prints each site's exact URL, and the dashboard shows it under **Workers & Pages** → the Worker.
 3. Verify: the **Workers & Pages** page loads without asking you to set anything up.
 
 ## 2. Log in from your laptop

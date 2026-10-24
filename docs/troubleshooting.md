@@ -25,6 +25,7 @@ The template needs Node 26. Run `nvm use` (it reads `.nvmrc`), or install Node 2
 |---|---|---|
 | `The project is not renamed (still "cloudflare-website-template")` | Setup hasn't run | `npm run setup` |
 | `wrangler.jsonc has no account_id` | Setup hasn't run, or didn't finish | `npm run setup` |
+| `wrangler.jsonc: env.<env>.… must …` | A setting the password gate relies on was changed or removed (often by replacing a `vars` object instead of adding to it) | Restore it as the message says. Staging needs `vars.AUTH_MODE: "password"`, `assets.run_worker_first: true` and `secrets.required` with `STAGING_PASSWORD`; production needs `vars.AUTH_MODE: "off"` and `assets.run_worker_first` including `"/__auth/*"` |
 | `Not logged in to Cloudflare` | No `wrangler login` session and no `CLOUDFLARE_API_TOKEN` | `npx wrangler login` |
 | `The staging Worker does not exist yet` (wrangler: `Worker "..." not found`) on `npm run publish:staging` | The password was never uploaded, so the staging Worker doesn't exist | `npm run setup` and answer **yes** to the upload |
 | `STAGING_PASSWORD is not set on the staging Worker` | The Worker exists but has no password | `npx wrangler secret put STAGING_PASSWORD --env staging`, or `npm run setup` |
@@ -61,10 +62,11 @@ The template needs Node 26. Run `nvm use` (it reads `.nvmrc`), or install Node 2
 
 | Message or symptom | Cause | Fix |
 |---|---|---|
-| `/__auth/...` returns `404 Not found` | Expected: the login page and its files are never public on production | None |
+| `/__auth/...` returns `404 Not found` | Expected: the login page and its files are not served at `/__auth/…` on production (the Worker returns `404` there) | None |
+| Production asks for a password, or returns `503 Staging password not configured.` | `env.production.vars.AUTH_MODE` is missing or not exactly `"off"`, so the Worker treats it as staging | Set `"AUTH_MODE": "off"` in the existing `env.production.vars`, then `npm run publish:production`. Preflight catches this before a publish. |
 | A new Worker route works with curl but browsers get the 404 page | Browser navigation misses skip the Worker on production | Add the path to production's `run_worker_first` in `wrangler.jsonc` |
 | Custom domain doesn't resolve | The zone isn't active in this account, or a CNAME already exists | See `docs/custom-domains.md` |
 
 ## Something went wrong after a deploy
 
-Roll back: `npx wrangler deployments list --env <env>` to find the last good version ID, then `npx wrangler rollback <version-id> --env <env>`. See [publishing.md](publishing.md#roll-back).
+Roll back: `npx wrangler deployments list --env <env>` to find the last good version ID, then `npx wrangler rollback <version-id> --env <env>`. A production rollback is a production change, so an AI assistant does it only when you ask. See [publishing.md](publishing.md#roll-back).

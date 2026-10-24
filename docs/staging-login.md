@@ -4,7 +4,7 @@ Staging is protected by one shared password. There are no user accounts. The cod
 
 ## How it works
 
-Every staging request runs the Worker (`run_worker_first: true`). In order:
+Every staging request runs the Worker (`run_worker_first: true`). The Worker skips the password only when `AUTH_MODE` is exactly `"off"` (production). Any other value, including a missing one, is treated as staging, so a misconfigured staging stays closed. In order:
 
 1. **No password configured.** If `STAGING_PASSWORD` is missing or empty, every path returns `503` with `Staging password not configured.`. Staging fails closed: it never serves content in this state.
 2. **`/robots.txt`** returns `200` with `User-agent: *` / `Disallow: /`, overriding the production file. No session is needed.
@@ -68,7 +68,7 @@ The default login page is `worker/login.html`: plain and unbranded, with inline 
 - The Worker HTML-escapes the values it puts in `{{NEXT}}` and `{{ERROR}}`.
 - **Assets:** load CSS, fonts and images from `/__auth/...` (put them in `public/__auth/`), or inline them. Anything else is behind the password, so the login page can't load it. Use plain file names.
 - **Clean URL:** the file is served at `/__auth/login`, not `/__auth/login.html`; a request for the `.html` URL gets a `307` redirect to the clean one. The Worker fetches `/__auth/login` from the built files and uses the override only when that returns `200`. Otherwise it uses the default page.
-- **Production:** `/__auth/*` returns `404` on production, so the override and its files are never public there.
+- **Production:** the override and its files are not served at `/__auth/…` on production (the Worker returns `404` there).
 
 ### Example
 

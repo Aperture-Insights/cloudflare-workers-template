@@ -65,11 +65,13 @@ Verify: `ls -l .dev.vars.staging` shows `-rw-------`.
 
 ## Before publishing
 
-Run these and make sure they pass:
+Run these in order and make sure each passes before the next:
 
 ```sh
-npm run build
 npm test
 npm run check
-npm run preview:staging   # then check the site in a browser or with curl
+npm run preview:staging   # builds, then check the site in a browser or with curl
+npm run publish:staging   # or publish:production
 ```
+
+This is the same sequence as in [publishing.md](publishing.md#recommended-flow).

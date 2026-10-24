@@ -30,7 +30,7 @@ Verify: `git remote -v` shows your site's repository for both fetch and push.
 The staging Worker must exist, with its password, before the first CI deploy. Otherwise preflight stops with `The staging Worker does not exist yet.`.
 
 1. From a laptop, run `npm run setup` once and answer **yes** to uploading the password.
-2. Commit and push the files setup changed (`package.json`, `wrangler.jsonc`, `src/site.config.ts`). CI needs your slug and `account_id`.
+2. Commit and push the files setup changed (`package.json`, `package-lock.json`, `wrangler.jsonc`, `src/site.config.ts`). CI needs your slug and `account_id`.
 3. Verify: `npx wrangler secret list --env staging` lists `STAGING_PASSWORD`.
 
 ### 3. Create a Cloudflare API token

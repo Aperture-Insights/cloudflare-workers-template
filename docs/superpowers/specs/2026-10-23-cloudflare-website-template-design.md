@@ -151,7 +151,7 @@ docs/                        # topic guides (4.8)
 
 **Behaviour**
 1. Every staging request enters the Worker (`run_worker_first: true`).
-2. If `AUTH_MODE` is not `"password"`, pass through to assets. This only happens in production and is a safety default.
+2. If `AUTH_MODE` is exactly `"off"`, pass through to assets (production). Any other value — including missing — is treated as staging. This keeps a misconfigured staging closed.
 3. **Fail closed:** if `STAGING_PASSWORD` is missing or empty, return `503` with a plain "staging password not configured" message for every request. Never serve content in this state.
 4. Requests under `/__auth/` are handled by the auth routes:
    - `GET /__auth/login` → login page.
@@ -215,10 +215,10 @@ docs/                        # topic guides (4.8)
 
 Interactive. Written in Node with no extra dependencies. Safe to re-run: it shows current values as defaults.
 
-1. **Project slug:** lowercase letters, digits, and hyphens. Short enough that `<slug>-production` is a valid Worker name; the builder confirms the current limit. Writes the slug to `wrangler.jsonc` `name` and to `package.json` `name`, and updates the site title placeholder in `src/`.
+1. **Project slug:** lowercase letters, digits, and hyphens. Short enough that `<slug>-production` is a valid Worker name; the builder confirms the current limit. Writes the slug to `wrangler.jsonc` `name`, to `package.json` `name`, and to `package-lock.json` (`name` and `packages[""].name`, skipped if the file is absent), and updates the site title placeholder in `src/`.
 2. **Cloudflare login:** if `wrangler whoami` shows no login, offer to run `wrangler login`.
 3. **Account ID:** if `wrangler whoami` lists exactly one account, offer it. If it lists several, let the user pick. Writes `account_id`.
-4. **Staging password:** offer a generated strong password, or let the user type one. Writes `.dev.vars.staging`, which is gitignored. Offers to upload it with `wrangler secret put STAGING_PASSWORD --env staging`, passing the value over stdin, never as an argument and never logged.
+4. **Staging password:** offer a generated strong password, or let the user type one. A typed password shorter than 16 characters gets a warning and a confirm prompt (default No → ask again). Writes `.dev.vars.staging`, which is gitignored. Offers to upload it with `wrangler secret put STAGING_PASSWORD --env staging`, passing the value over stdin, never as an argument and never logged.
 5. Prints a summary and the next commands (`npm run preview:staging`, `npm run publish:staging`).
 
 ### 4.6 Publishing
@@ -230,6 +230,7 @@ Interactive. Written in Node with no extra dependencies. Safe to re-run: it show
   - `account_id` is set.
   - Authenticated: `wrangler whoami` succeeds, or `CLOUDFLARE_API_TOKEN` is present.
   - **Staging only:** `STAGING_PASSWORD` is set on the staging Worker. `secrets.required` also enforces this at deploy time.
+  - `wrangler.jsonc` keeps the auth settings for the target environment. Staging: `vars.AUTH_MODE` is `"password"`, `assets.run_worker_first` is `true`, `secrets.required` includes `"STAGING_PASSWORD"`. Production: `vars.AUTH_MODE` is `"off"`, `assets.run_worker_first` is an array that includes `"/__auth/*"`.
 - **First staging deploy:** `secrets.required` blocks a deploy to a Worker that doesn't exist yet. So the staging password must be uploaded first, through `npm run setup`, which runs `wrangler secret put`; that creates the staging Worker as a draft. Preflight detects "Worker not found" and tells the user to run setup. The docs state this order. The same applies before the first CI deploy.
 - **Production confirmation:** `publish:production` asks "Deploy <slug> to PRODUCTION? (y/N)". The prompt is skipped when `CI=true` or `--yes` is passed.
 
@@ -268,6 +269,7 @@ Interactive. Written in Node with no extra dependencies. Safe to re-run: it show
   - `/__auth/<asset>` served without a session;
   - staging `/robots.txt` → `Disallow: /`;
   - `AUTH_MODE=off` → pass-through: a non-navigation miss goes to `env.ASSETS`, and `/__auth/login` returns 404.
+  - `AUTH_MODE` missing, empty, or any value other than `"off"` → staging path (`503` without a password, `401` login with one).
 - `npm run check` covers types. There are no site content tests; the template has no content to test.
 
 ### 4.8 Documentation

@@ -38,32 +38,38 @@ About setup:
    | The project is renamed | `The project is not renamed (still "cloudflare-website-template").` | `npm run setup` |
    | `account_id` is set | `wrangler.jsonc has no account_id.` | `npm run setup` |
    | Logged in. Skipped when `CLOUDFLARE_API_TOKEN` is set. | `Not logged in to Cloudflare.` | `npx wrangler login`, or set `CLOUDFLARE_API_TOKEN` |
+   | Staging only: `wrangler.jsonc` keeps the password gate: `env.staging.vars.AUTH_MODE` is `"password"`, `assets.run_worker_first` is `true`, `secrets.required` includes `STAGING_PASSWORD` | `wrangler.jsonc: env.staging.… must …` | Restore the setting as the message says |
+   | Production only: `env.production.vars.AUTH_MODE` is `"off"` and `assets.run_worker_first` includes `"/__auth/*"` | `wrangler.jsonc: env.production.… must …` | Restore the setting as the message says |
    | Staging only: the staging Worker exists | `The staging Worker does not exist yet.` | `npm run setup` and upload the password |
    | Staging only: `STAGING_PASSWORD` is set on it | `STAGING_PASSWORD is not set on the staging Worker.` | `npm run setup`, or `npx wrangler secret put STAGING_PASSWORD --env staging` |
 
 2. **Production only: confirmation.** It asks `Deploy <slug> to PRODUCTION? (y/N)`. Anything but `y` or `yes` prints `Aborted.` and exits. The prompt is skipped only when you pass `--yes` (`npm run publish:production -- --yes`) or the environment variable `CI` is exactly `true`. `CI=1` or `CI=false` still asks.
 3. **Build:** `npm run build`.
-4. **Deploy:** `npx wrangler deploy --env <env>`. Wrangler prints the deployed URL, for example `https://<slug>-staging.<subdomain>.workers.dev`, followed by the new version ID.
+4. **Deploy:** `npx wrangler deploy --env <env>`. Wrangler prints the deployed URL, for example `https://<slug>-staging.<account-subdomain>.workers.dev`, followed by `Current Version ID: <id>`. Keep this output: it is the easiest place to find the URL and the version ID. You can also find the URL in the Cloudflare dashboard under **Workers & Pages** → the Worker. `npx wrangler deployments list` does not show URLs.
 
 You can run the checks alone with `node scripts/preflight.mjs staging` (or `production`). It prints `Preflight OK.` when everything passes.
 
 ## Recommended flow
 
-1. `npm run build && npm test && npm run check`
-2. `npm run preview:staging`, then check the site locally.
-3. `npm run publish:staging`
-4. Check staging: `curl -si https://<slug>-staging.<subdomain>.workers.dev/ | head -1` returns `401` (the login page). Then log in with a browser.
-5. `npm run publish:production` and answer `y`.
-6. Verify: `curl -si https://<slug>-production.<subdomain>.workers.dev/ | head -1` returns `200`.
+Before every publish, run the same sequence and stop at the first failure:
+
+1. `npm test`
+2. `npm run check`
+3. `npm run preview:staging` (it builds first), then check the site locally.
+4. `npm run publish:staging`
+5. Check staging: `curl -si <staging-url>/ | head -1` returns `401` (the login page). Then log in with a browser. `<staging-url>` is the URL the publish printed.
+6. `npm run publish:production` and answer `y`.
+7. Verify: `curl -si <production-url>/ | head -1` returns `200`, using the URL that publish printed.
 
 ## Roll back
 
-Every deploy creates a new version of the Worker. So does `wrangler secret put`. To go back to an earlier version:
+Every deploy creates a new version of the Worker. So does `wrangler secret put`. Rolling back production changes what the public sees, so treat it like a production publish: an AI assistant does it only when you explicitly ask. To go back to an earlier version:
 
 1. List recent deployments and their version IDs:
    ```sh
    npx wrangler deployments list --env production
    ```
+   Each deployment has a `Source` field that says what created it: `Upload` for a deploy, `Secret Change` for a version created by `wrangler secret put` (a password change), and `Rollback` for a rollback. When Cloudflare records no trigger, Wrangler shows the tool instead, such as `Wrangler 🤠`. Pick the last good `Upload`. When unsure, use the `Current Version ID` that `npm run publish:staging` or `npm run publish:production` printed for the deploy you know was good.
 2. Roll back to the last good version by passing its ID:
    ```sh
    npx wrangler rollback <version-id> --env production

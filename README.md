@@ -30,6 +30,7 @@ AI coding assistants should read [`AGENTS.md`](AGENTS.md). It is the complete gu
      git remote set-url origin <your-site-repo-url>
      git push -u origin HEAD:main
      ```
+     If your copy has no `origin` at all (`git remote -v` prints nothing), add it instead: `git remote add origin <your-site-repo-url>`.
 
    Verify: `git remote -v` shows your site's repository, not the template.
 2. **Install** the dependencies:
@@ -45,7 +46,7 @@ AI coding assistants should read [`AGENTS.md`](AGENTS.md). It is the complete gu
    - the site title;
    - whether to run `wrangler login`, if you are not logged in to Cloudflare (it asks first, then opens your browser);
    - which Cloudflare account to use;
-   - a staging password. Press Enter to generate a strong one (24 random characters). A generated password is printed once, and only in an interactive terminal, so save it in a password manager straight away. It is also saved to `.dev.vars.staging`, readable only by you.
+   - a staging password. Press Enter to generate a strong one (24 random characters). If you type one shorter than 16 characters, setup warns you and asks you to confirm. A generated password is printed once, and only in an interactive terminal, so save it in a password manager straight away. It is also saved to `.dev.vars.staging`, readable only by you.
 
    When it asks whether to upload the password to Cloudflare, answer **yes**. You can't publish staging until the password is uploaded, and the upload also creates the staging Worker.
 
@@ -59,11 +60,13 @@ AI coding assistants should read [`AGENTS.md`](AGENTS.md). It is the complete gu
    ```sh
    npm run publish:staging
    ```
-   Wrangler prints the URL, which looks like `https://my-site-staging.<your-subdomain>.workers.dev`.
+   Wrangler prints the URL, which looks like `https://my-site-staging.<account-subdomain>.workers.dev`, where `<account-subdomain>` is your account's `workers.dev` subdomain. You can also find it in the Cloudflare dashboard under **Workers & Pages** → the Worker.
 
 When staging looks right, run `npm run publish:production`. It asks you to confirm first.
 
-Commit the files that setup changed (`package.json`, `wrangler.jsonc`, `src/site.config.ts`) and push them to your site's repository. `.dev.vars.staging` holds your password; setup makes it readable only by you (mode `600`), and git ignores it. Never commit it.
+Before every publish, run the same sequence: `npm test`, then `npm run check`, then `npm run preview:staging`, then `npm run publish:staging` or `npm run publish:production`. See [Publishing](docs/publishing.md#recommended-flow).
+
+Commit the files that setup changed (`package.json`, `package-lock.json`, `wrangler.jsonc`, `src/site.config.ts`) and push them to your site's repository. `.dev.vars.staging` holds your password; setup makes it readable only by you (mode `600`), and git ignores it. Never commit it.
 
 ## Everyday commands
 
