@@ -24,6 +24,26 @@ function withNoindex(response: Response): Response {
   return copy;
 }
 
+function privateNoStore(response: Response): Response {
+  // Staging content must never be cached by shared caches, whatever ASSETS set.
+  const copy = new Response(response.body, response);
+  copy.headers.set("Cache-Control", "private, no-store");
+  return copy;
+}
+
+function plain(body: string, status: number, extra: Record<string, string> = {}): Response {
+  return new Response(body, {
+    status,
+    headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", ...extra },
+  });
+}
+
+// A public /__auth/ path must be plain: no percent-encoding, backslashes, dot segments
+// or empty segments, so it cannot be decoded or normalised into a path outside /__auth/.
+function isPlainAuthAssetPath(pathname: string): boolean {
+  return !/%|\\|\.\.|\/\//.test(pathname);
+}
+
 function redirect(location: string, setCookie: string): Response {
   return new Response(null, {
     status: 303,
@@ -51,10 +71,10 @@ async function handleStaging(request: Request, env: Env, password: string): Prom
   const secure = url.protocol === "https:";
 
   if (pathname === "/robots.txt") {
-    return new Response(ROBOTS_BODY, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    return plain(ROBOTS_BODY, 200, { "Cache-Control": "private, no-store" });
   }
 
-  if (pathname === LOGIN_PATH && request.method === "GET") {
+  if (pathname === LOGIN_PATH && (request.method === "GET" || request.method === "HEAD")) {
     return renderLogin(env, origin, { next: safeNext(url.searchParams.get("next")), error: false }, 200);
   }
 
@@ -70,18 +90,23 @@ async function handleStaging(request: Request, env: Env, password: string): Prom
     return renderLogin(env, origin, { next, error: true }, 401);
   }
 
-  if (pathname === LOGOUT_PATH && request.method === "GET") {
-    return redirect("/", clearSessionCookie(secure));
+  if (pathname === LOGIN_PATH) {
+    return plain("Method not allowed.", 405, { Allow: "GET, POST" });
   }
 
-  // Other /__auth/* files (override CSS, logo, ...) are public so the login page can load them.
-  if (pathname.startsWith(AUTH_PREFIX)) {
-    return env.ASSETS.fetch(request);
+  if (pathname === LOGOUT_PATH) {
+    if (request.method === "GET") return redirect("/", clearSessionCookie(secure));
+    return plain("Method not allowed.", 405, { Allow: "GET" });
+  }
+
+  // Other plain /__auth/* files (override CSS, logo, ...) are public so the login page can load them.
+  if (pathname.startsWith(AUTH_PREFIX) && isPlainAuthAssetPath(pathname)) {
+    return privateNoStore(await env.ASSETS.fetch(request));
   }
 
   const token = readCookie(request.headers.get("Cookie"), COOKIE_NAME);
   if (await verifySession(password, token, Math.floor(Date.now() / 1000))) {
-    return env.ASSETS.fetch(request);
+    return privateNoStore(await env.ASSETS.fetch(request));
   }
 
   return renderLogin(env, origin, { next: pathname + url.search, error: false }, 401);
@@ -99,14 +124,14 @@ export default {
 
     const password = env.STAGING_PASSWORD;
     if (!password) {
-      return withNoindex(
-        new Response("Staging password not configured.", {
-          status: 503,
-          headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
-        }),
-      );
+      return withNoindex(plain("Staging password not configured.", 503));
     }
 
-    return withNoindex(await handleStaging(request, env, password));
+    try {
+      return withNoindex(await handleStaging(request, env, password));
+    } catch {
+      // Never fall back to content and never echo the error.
+      return withNoindex(plain("Internal error.", 500));
+    }
   },
 };

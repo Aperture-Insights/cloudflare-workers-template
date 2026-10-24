@@ -10,7 +10,10 @@ function fakeAssets(): Fetcher {
     fetch: async (input: RequestInfo | URL) => {
       const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
       if (url.pathname === "/__auth/login") return new Response("not found", { status: 404 });
-      return new Response(`asset:${url.pathname}`, { status: 200 });
+      return new Response(`asset:${url.pathname}`, {
+        status: 200,
+        headers: { "Cache-Control": "public, max-age=31536000" },
+      });
     },
   } as unknown as Fetcher;
 }
@@ -230,4 +233,111 @@ describe("staging: public auth assets and logout", () => {
     expect(res.headers.get("Set-Cookie")).toContain("Max-Age=0");
     expect(res.headers.get("X-Robots-Tag")).toBe(NOINDEX);
   });
+});
+
+async function validCookie(): Promise<string> {
+  const token = await signSession(PW, Math.floor(Date.now() / 1000) + 3600);
+  return `site_auth=${token}`;
+}
+
+describe("staging: public /__auth/ assets reject encoded or traversal paths", () => {
+  for (const path of ["/__auth/..%2Fdocs", "/__auth/%2e%2e/docs", "/__auth/a%2Fb", "/__auth/a%5Cb", "/__auth/a//b"]) {
+    it(`${path} without a session responds 401 login`, async () => {
+      const res = await worker.fetch(req(path), stagingEnv());
+      expect(res.status).toBe(401);
+      const body = await res.text();
+      expect(body).toContain('action="/__auth/login"');
+      expect(body).not.toContain("asset:");
+      expect(res.headers.get("X-Robots-Tag")).toBe(NOINDEX);
+    });
+  }
+
+  it("/__auth/logo.svg is still served publicly", async () => {
+    const res = await worker.fetch(req("/__auth/logo.svg"), stagingEnv());
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("asset:/__auth/logo.svg");
+  });
+
+  it("/__auth/a%2Fb with a valid cookie is served via the session path", async () => {
+    const res = await worker.fetch(req("/__auth/a%2Fb", { headers: { Cookie: await validCookie() } }), stagingEnv());
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("asset:/__auth/a%2Fb");
+  });
+});
+
+describe("staging: Cache-Control private, no-store", () => {
+  const PRIVATE = "private, no-store";
+
+  it("on a session-authenticated asset (overrides ASSETS)", async () => {
+    const res = await worker.fetch(req("/docs", { headers: { Cookie: await validCookie() } }), stagingEnv());
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe(PRIVATE);
+  });
+
+  it("on a public /__auth/ asset", async () => {
+    const res = await worker.fetch(req("/__auth/logo.svg"), stagingEnv());
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe(PRIVATE);
+  });
+
+  it("on robots.txt", async () => {
+    const res = await worker.fetch(req("/robots.txt"), stagingEnv());
+    expect(res.headers.get("Cache-Control")).toBe(PRIVATE);
+  });
+
+  it("login, 401 keep no-store", async () => {
+    const page = await worker.fetch(req("/__auth/login"), stagingEnv());
+    expect(page.headers.get("Cache-Control")).toBe("no-store");
+    const gate = await worker.fetch(req("/docs"), stagingEnv());
+    expect(gate.headers.get("Cache-Control")).toBe("no-store");
+  });
+});
+
+describe("staging: exceptions", () => {
+  it("a throwing ASSETS with a valid cookie responds 500 without content", async () => {
+    const env: Env = {
+      ...stagingEnv(),
+      ASSETS: {
+        fetch: async () => {
+          throw new Error("boom secret-detail");
+        },
+      } as unknown as Fetcher,
+    };
+    const res = await worker.fetch(req("/docs", { headers: { Cookie: await validCookie() } }), env);
+    expect(res.status).toBe(500);
+    expect(await res.text()).toBe("Internal error.");
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(res.headers.get("X-Robots-Tag")).toBe(NOINDEX);
+  });
+});
+
+describe("staging: methods on auth routes", () => {
+  it("HEAD /__auth/login behaves like GET (200)", async () => {
+    const res = await worker.fetch(req("/__auth/login", { method: "HEAD" }), stagingEnv());
+    expect(res.status).toBe(200);
+    expect(res.headers.get("X-Robots-Tag")).toBe(NOINDEX);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  for (const method of ["OPTIONS", "PUT", "DELETE"]) {
+    it(`${method} /__auth/login responds 405 Allow: GET, POST`, async () => {
+      const res = await worker.fetch(req("/__auth/login", { method }), stagingEnv());
+      expect(res.status).toBe(405);
+      expect(res.headers.get("Allow")).toBe("GET, POST");
+      expect(res.headers.get("X-Robots-Tag")).toBe(NOINDEX);
+      expect(res.headers.get("Cache-Control")).toBe("no-store");
+      expect(await res.text()).not.toContain("asset:");
+    });
+  }
+
+  for (const method of ["POST", "HEAD", "OPTIONS"]) {
+    it(`${method} /__auth/logout responds 405 Allow: GET`, async () => {
+      const res = await worker.fetch(req("/__auth/logout", { method }), stagingEnv());
+      expect(res.status).toBe(405);
+      expect(res.headers.get("Allow")).toBe("GET");
+      expect(res.headers.get("X-Robots-Tag")).toBe(NOINDEX);
+      expect(res.headers.get("Cache-Control")).toBe("no-store");
+      expect(res.headers.get("Set-Cookie")).toBeNull();
+    });
+  }
 });
