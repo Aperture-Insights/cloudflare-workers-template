@@ -17,11 +17,21 @@ AI coding assistants should read [`AGENTS.md`](AGENTS.md). It is the complete gu
 
 ## Quickstart
 
-1. **Clone** the template into a new folder, named after your site:
-   ```sh
-   git clone <this-repo-url> my-site
-   cd my-site
-   ```
+1. **Make your own copy** of the template, in a new repository for your site. Do not work in a plain clone of the template: `origin` would still point at the template, and pushes would go there. Either:
+   - on GitHub, choose **Use this template → Create a new repository** (if the template repo offers it), then clone your new repository:
+     ```sh
+     git clone <your-site-repo-url> my-site
+     cd my-site
+     ```
+   - or create an empty repository for your site, then clone the template and point `origin` at your repository:
+     ```sh
+     git clone <template-repo-url> my-site
+     cd my-site
+     git remote set-url origin <your-site-repo-url>
+     git push -u origin HEAD:main
+     ```
+
+   Verify: `git remote -v` shows your site's repository, not the template.
 2. **Install** the dependencies:
    ```sh
    npm install
@@ -33,9 +43,9 @@ AI coding assistants should read [`AGENTS.md`](AGENTS.md). It is the complete gu
    It asks for:
    - a project slug, such as `my-site`;
    - the site title;
-   - a Cloudflare login (it opens your browser if you are not logged in);
+   - whether to run `wrangler login`, if you are not logged in to Cloudflare (it asks first, then opens your browser);
    - which Cloudflare account to use;
-   - a staging password. Press Enter to generate a strong one. It is shown once, so save it in a password manager.
+   - a staging password. Press Enter to generate a strong one (24 random characters). A generated password is printed once, and only in an interactive terminal, so save it in a password manager straight away. It is also saved to `.dev.vars.staging`, readable only by you.
 
    When it asks whether to upload the password to Cloudflare, answer **yes**. You can't publish staging until the password is uploaded, and the upload also creates the staging Worker.
 
@@ -53,7 +63,7 @@ AI coding assistants should read [`AGENTS.md`](AGENTS.md). It is the complete gu
 
 When staging looks right, run `npm run publish:production`. It asks you to confirm first.
 
-Commit the files that setup changed (`package.json`, `wrangler.jsonc`, `src/site.config.ts`). `.dev.vars.staging` holds your password, and git ignores it. Never commit it.
+Commit the files that setup changed (`package.json`, `wrangler.jsonc`, `src/site.config.ts`) and push them to your site's repository. `.dev.vars.staging` holds your password; setup makes it readable only by you (mode `600`), and git ignores it. Never commit it.
 
 ## Everyday commands
 

@@ -19,7 +19,13 @@ The steps are `actions/checkout@v7`, then `actions/setup-node@v7` (Node from `.n
 
 ## Enable it
 
-### 1. Create the staging Worker first
+### 1. Check you are in your site's repository
+
+Run `git remote -v`. `origin` must be your site's own GitHub repository, **not the template**. If it shows the template, point it at your repository first with `git remote set-url origin <your-site-repo-url>` (see the [README quickstart](../README.md#quickstart)). Otherwise the steps below would push your site and a `staging` branch into the template.
+
+Verify: `git remote -v` shows your site's repository for both fetch and push.
+
+### 2. Create the staging Worker first
 
 The staging Worker must exist, with its password, before the first CI deploy. Otherwise preflight stops with `The staging Worker does not exist yet.`.
 
@@ -27,7 +33,7 @@ The staging Worker must exist, with its password, before the first CI deploy. Ot
 2. Commit and push the files setup changed (`package.json`, `wrangler.jsonc`, `src/site.config.ts`). CI needs your slug and `account_id`.
 3. Verify: `npx wrangler secret list --env staging` lists `STAGING_PASSWORD`.
 
-### 2. Create a Cloudflare API token
+### 3. Create a Cloudflare API token
 
 1. In the Cloudflare dashboard, go to **My Profile → API Tokens → Create Token**.
 2. Choose the **Edit Cloudflare Workers** template.
@@ -45,7 +51,7 @@ The template grants more than deploys need: Workers KV, R2, Tail and Workers Rou
 
 References: [API token templates](https://developers.cloudflare.com/fundamentals/api/reference/template/), [Wrangler in GitHub Actions](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/).
 
-### 3. Add the secret and the variable to GitHub
+### 4. Add the secret and the variable to GitHub
 
 In the repository, go to **Settings → Secrets and variables → Actions**:
 
@@ -63,7 +69,7 @@ Verify: `gh secret list` shows `CLOUDFLARE_API_TOKEN`, and `gh variable list` sh
 
 To turn deploys off again, set `DEPLOY_ENABLED` to anything else, or delete it. Runs are then skipped.
 
-### 4. Protect production (recommended)
+### 5. Protect production (recommended)
 
 The workflow creates the `staging` and `production` GitHub Environments on its first run. You can also create them first in **Settings → Environments**. In the `production` environment:
 
@@ -72,7 +78,7 @@ The workflow creates the `staging` and `production` GitHub Environments on its f
 
 Verify: in **Settings → Environments → production**, the rules are listed.
 
-### 5. Create the `staging` branch
+### 6. Create the `staging` branch
 
 ```sh
 git push origin HEAD:staging

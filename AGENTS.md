@@ -50,7 +50,7 @@ Other useful commands:
 | `npx wrangler secret list --env staging` | Lists secret names on the staging Worker. Values are never shown. |
 | `npx wrangler secret put STAGING_PASSWORD --env staging` | Sets the staging password. Type it at the prompt; never pass it as an argument. Takes effect immediately. |
 | `npx wrangler deployments list --env <env>` | Lists recent deployments. |
-| `npx wrangler rollback --env <env>` | Rolls back to an earlier version. |
+| `npx wrangler rollback <version-id> --env <env>` | Rolls back to that version. Without a version ID it picks the version uploaded before the latest one. It asks for an optional message and a confirmation. |
 
 ## 3. File map
 
@@ -60,8 +60,8 @@ Other useful commands:
 | `public/` | Files copied as-is into `dist/`: `robots.txt` (production, allow all) and `favicon.svg`. An optional login override goes in `public/__auth/`. | **Yes** |
 | `astro.config.mjs`, `tsconfig.json` | Astro config (`output: 'static'`) and the site's TypeScript config. | Sometimes |
 | `wrangler.jsonc` | Worker names, `account_id`, the two environments, vars, required secrets, asset settings and custom domains. | Rarely: setup writes `name` and `account_id`. |
-| `worker/` | The Worker: `index.ts` (routing), `auth.ts` (password check, session token, cookies), `login.ts` + `login.html` (the default login page), `env.d.ts` (the `Env` type), `worker-configuration.d.ts` (generated runtime types), `test/` (Worker tests). | **No**, unless the task is about the Worker itself. |
-| `scripts/` | `setup.mjs`, `preflight.mjs`, `publish.mjs`, `check-docs.mjs`, shared helpers in `lib/`, Node tests in `test/`. | **No** |
+| `worker/` | The Worker: `index.ts` (routing), `auth.ts` (password check, session token, cookies), `login.ts` + `login.html` (the default login page), `html.d.ts` (lets TypeScript import `.html` as a string), `env.d.ts` (the `Env` type), `worker-configuration.d.ts` (generated runtime types, from `npm run types`), `tsconfig.json` (Worker type-check config used by `check:worker`), `test/` (Worker tests). | **No**, unless the task is about the Worker itself. |
+| `scripts/` | `setup.mjs`, `preflight.mjs`, `publish.mjs`, `check-docs.mjs`, shared helpers in `lib/`, Node tests in `test/`, and `jsconfig.json` (the JSDoc type-check config used by `check:worker`). | **No** |
 | `.github/workflows/deploy.yml` | Opt-in CI deploy, gated on the repository variable `DEPLOY_ENABLED`. | Rarely |
 | `.dev.vars.staging` | Local copy of `STAGING_PASSWORD` for `npm run preview:staging`. Git-ignored and owner-read-only. Written by setup. | Only through setup |
 | `.dev.vars.staging.example` | Committed example: `STAGING_PASSWORD=change-me`. | No |
@@ -101,8 +101,9 @@ Each recipe ends with a command that verifies it worked.
 
 ### First-time setup / rename
 
-1. `npm install` (Node 26; run `nvm use` if you use nvm).
-2. `npm run setup` (interactive; the user must answer the prompts). It asks for:
+1. Make sure the repo is the site's own repository, not the template. Run `git remote -v`. If `origin` is the template repo, stop and ask the user for their site's repository URL; then run `git remote set-url origin <site-repo-url>`. (Or the user creates the repo with GitHub's **Use this template** and clones that.) Never push a renamed site or a `staging` branch to the template.
+2. `npm install` (Node 26; run `nvm use` if you use nvm).
+3. `npm run setup` (interactive; the user must answer the prompts). It asks for:
    - the project slug: lowercase letters, digits and hyphens, at most 52 characters, and not `cloudflare-website-template`;
    - the site title;
    - a Cloudflare login, if there is none (it offers to run `wrangler login`);
@@ -111,9 +112,9 @@ Each recipe ends with a command that verifies it worked.
    - whether to upload the password to Cloudflare.
 
    Setup shows current values as defaults and is safe to re-run. It writes files only after the last prompt: `package.json` `name`, `wrangler.jsonc` `name` and `account_id`, the `title` in `src/site.config.ts`, and `.dev.vars.staging` (owner-read-only). A generated password is printed once, and only in an interactive terminal.
-3. Answer **yes** to the upload. It runs `wrangler secret put STAGING_PASSWORD --env staging` over stdin, which also creates the staging Worker. This must happen before the first `npm run publish:staging` and before the first CI deploy.
-4. Commit `package.json`, `wrangler.jsonc` and `src/site.config.ts`. Never commit `.dev.vars.staging`.
-5. Verify: `npx wrangler secret list --env staging` lists `STAGING_PASSWORD`, and `grep -E '"(name|account_id)"' wrangler.jsonc` shows the new slug and account.
+4. Answer **yes** to the upload. It runs `wrangler secret put STAGING_PASSWORD --env staging` over stdin, which also creates the staging Worker. This must happen before the first `npm run publish:staging` and before the first CI deploy.
+5. Commit `package.json`, `wrangler.jsonc` and `src/site.config.ts`, and push to the site's repository. Never commit `.dev.vars.staging`.
+6. Verify: `git remote -v` shows the site's repository, `npx wrangler secret list --env staging` lists `STAGING_PASSWORD`, and `grep -E '"(name|account_id)"' wrangler.jsonc` shows the new slug and account.
 
 ### Add a page
 
@@ -150,7 +151,7 @@ Each recipe ends with a command that verifies it worked.
    - optionally `{{ERROR}}` where the error should appear (empty when there is no error).
 3. Load CSS, fonts and images from `/__auth/...` (for example `public/__auth/login.css`), or inline them. Use plain file names: no `..`, `%`, `\` or `//` in paths.
 4. A complete copy-paste example is in `docs/staging-login.md`.
-5. Verify: `npm run build && ls dist/__auth/login.html`, then run `npm run preview:staging` and, in a second terminal, `curl -s http://localhost:8787/ | head -20` shows your page (status `401`).
+5. Verify: `npm run build && ls dist/__auth/login.html`, then run `npm run preview:staging` and, in a second terminal, `curl -si http://localhost:8787/ | head -20` shows `HTTP/1.1 401 Unauthorized` followed by your page's HTML.
 
 ### Change the staging password
 
@@ -174,6 +175,7 @@ Details: `docs/custom-domains.md`.
 
 ### Enable GitHub Actions
 
+0. Guard: run `git remote -v`. `origin` must be the site's own GitHub repository, not the template. If it is the template, stop and ask the user (see the first-time setup recipe, step 1).
 1. Run `npm run setup` once from a laptop and upload the password, so that the staging Worker exists.
 2. Create a Cloudflare API token from the **Edit Cloudflare Workers** template, scoped to the one account.
 3. In the GitHub repository, add the secret `CLOUDFLARE_API_TOKEN`, and set the repository variable `DEPLOY_ENABLED` to `true`.
@@ -199,14 +201,14 @@ Details: `docs/swapping-the-framework.md`.
 Vars and secrets reach only the Worker. The static pages are built before deploy and cannot read them at runtime.
 
 1. **Plain var:** add it to `vars` in **both** `env.staging` and `env.production` in `wrangler.jsonc`. Vars are not inherited.
-2. **Secret:** run `npx wrangler secret put <NAME> --env <env>` and type the value at the prompt. For local preview, add `<NAME>=value` to `.dev.vars.<env>`. Add the name to that environment's `secrets.required`; otherwise `wrangler dev` will not load it locally, because only listed keys load. A listed secret also makes deploys fail until it is set.
+2. **Secret:** run `npx wrangler secret put <NAME> --env <env>` and type the value at the prompt. For local preview, add `<NAME>=value` to `.dev.vars.<env>`. On staging, which has a `secrets` block, also add the name to `env.staging.secrets.required`: with `secrets.required` set, `wrangler dev` loads only the listed keys from `.dev.vars.staging`, and a listed secret makes deploys fail until it is set. Production has no `secrets` block, so `.dev.vars.production` loads in full.
 3. If Worker code reads it, add it to the `Env` interface in `worker/env.d.ts`.
 4. Verify: `npm run check:worker && npm test`.
 
 ### Roll back a bad deploy
 
 1. Run `npx wrangler deployments list --env <env>` (`staging` or `production`) to see recent deployments and their version IDs.
-2. Run `npx wrangler rollback --env <env>`. Pick the version at the prompt, or pass a version ID: `npx wrangler rollback <version-id> --env <env>`. A rollback restores the Worker and its static assets.
+2. Run `npx wrangler rollback <version-id> --env <env>` with the version ID of the last good deployment. Without a version ID, `npx wrangler rollback --env <env>` uses the version uploaded before the latest one. On staging that may be a version created by a password change (`wrangler secret put` also creates versions), so prefer an explicit ID. Wrangler asks for an optional rollback message (`--message` skips that prompt and the confirmation), shows the version, and asks you to confirm. If secrets changed since that version, it asks again. Bound resources are not rolled back. Source: `npx wrangler rollback --help` and [Wrangler commands: rollback](https://developers.cloudflare.com/workers/wrangler/commands/workers/).
 3. Fix the problem in git, and publish again when ready.
 4. Verify: `npx wrangler deployments list --env <env>` shows the rollback as the latest deployment.
 
@@ -224,12 +226,14 @@ Vars and secrets reach only the Worker. The static pages are built before deploy
 To log in to a local staging preview with curl, without putting the password in an argument:
 
 ```sh
+jar="$(mktemp)"
 sed -n 's/^STAGING_PASSWORD=//p' .dev.vars.staging | tr -d '\n' \
-  | curl -si -c /tmp/jar --data-urlencode password@- http://localhost:8787/__auth/login
-curl -si -b /tmp/jar http://localhost:8787/
+  | curl -si -c "$jar" --data-urlencode password@- http://localhost:8787/__auth/login
+curl -si -b "$jar" http://localhost:8787/
+rm "$jar"
 ```
 
-The first command returns `303` with `Set-Cookie: site_auth=...`. The second returns `200`.
+The login request returns `303` with `Set-Cookie: site_auth=...`. The request with the cookie returns `200`.
 
 ## 7. Troubleshooting
 

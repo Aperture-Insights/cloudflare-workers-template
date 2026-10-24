@@ -43,7 +43,7 @@ About setup:
 
 2. **Production only: confirmation.** It asks `Deploy <slug> to PRODUCTION? (y/N)`. Anything but `y` or `yes` prints `Aborted.` and exits. The prompt is skipped only when you pass `--yes` (`npm run publish:production -- --yes`) or the environment variable `CI` is exactly `true`. `CI=1` or `CI=false` still asks.
 3. **Build:** `npm run build`.
-4. **Deploy:** `npx wrangler deploy --env <env>`. Wrangler's output ends with the deployed URL, for example `https://<slug>-staging.<subdomain>.workers.dev`.
+4. **Deploy:** `npx wrangler deploy --env <env>`. Wrangler prints the deployed URL, for example `https://<slug>-staging.<subdomain>.workers.dev`, followed by the new version ID.
 
 You can run the checks alone with `node scripts/preflight.mjs staging` (or `production`). It prints `Preflight OK.` when everything passes.
 
@@ -58,17 +58,24 @@ You can run the checks alone with `node scripts/preflight.mjs staging` (or `prod
 
 ## Roll back
 
-Every deploy creates a new version of the Worker, including its static files. To go back to an earlier one:
+Every deploy creates a new version of the Worker. So does `wrangler secret put`. To go back to an earlier version:
 
 1. List recent deployments and their version IDs:
    ```sh
    npx wrangler deployments list --env production
    ```
-2. Roll back. Wrangler lets you pick a version, or you can pass its ID:
+2. Roll back to the last good version by passing its ID:
    ```sh
-   npx wrangler rollback --env production
    npx wrangler rollback <version-id> --env production
    ```
+   Without an ID, `npx wrangler rollback --env production` uses the version uploaded before the latest one ([docs](https://developers.cloudflare.com/workers/wrangler/commands/workers/)). On staging, the version before the latest may be one a password change created, so passing an explicit ID is safer.
+
+   Wrangler then:
+   - asks for an optional rollback message (`--message "<text>"` skips this prompt and the confirmation);
+   - shows the version it will deploy;
+   - asks `Are you sure you want to deploy this Worker Version to 100% of traffic?`.
+
+   If secrets changed since that version, Wrangler lists them and asks again. Bound resources (KV, R2, D1 and so on) are not rolled back.
 3. Fix the problem in your code. The next publish deploys your current code again.
 4. Verify: `npx wrangler deployments list --env production` shows the rollback as the newest deployment.
 

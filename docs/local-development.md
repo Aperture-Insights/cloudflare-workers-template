@@ -38,9 +38,11 @@ Open `http://localhost:8787` in a browser and log in with the password from `.de
 To log in with curl without putting the password in a command argument:
 
 ```sh
+jar="$(mktemp)"
 sed -n 's/^STAGING_PASSWORD=//p' .dev.vars.staging | tr -d '\n' \
-  | curl -si -c /tmp/jar --data-urlencode password@- http://localhost:8787/__auth/login
-curl -si -b /tmp/jar http://localhost:8787/ | head -1   # HTTP/1.1 200 OK
+  | curl -si -c "$jar" --data-urlencode password@- http://localhost:8787/__auth/login | head -1   # HTTP/1.1 303 See Other
+curl -si -b "$jar" http://localhost:8787/ | head -1   # HTTP/1.1 200 OK
+rm "$jar"
 ```
 
 Stop either preview with `x` or Ctrl+C.

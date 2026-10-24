@@ -67,4 +67,4 @@ The template needs Node 26. Run `nvm use` (it reads `.nvmrc`), or install Node 2
 
 ## Something went wrong after a deploy
 
-Roll back: `npx wrangler deployments list --env <env>`, then `npx wrangler rollback --env <env>`. See [publishing.md](publishing.md#roll-back).
+Roll back: `npx wrangler deployments list --env <env>` to find the last good version ID, then `npx wrangler rollback <version-id> --env <env>`. See [publishing.md](publishing.md#roll-back).
