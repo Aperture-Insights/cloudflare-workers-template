@@ -1,4 +1,4 @@
 export const SITE = {
-  title: "My Website",
+  title: "Cloudflare Website Template",
   description: "A static website on Cloudflare Workers.",
 };
