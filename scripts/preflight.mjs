@@ -21,6 +21,49 @@ const realDeps = {
 };
 
 /**
+ * Checks the wrangler.jsonc settings the Worker's auth relies on, for one environment.
+ * @param {any} config parsed wrangler.jsonc
+ * @param {"staging" | "production"} env
+ * @returns {string[]}
+ */
+export function authConfigProblems(config, env) {
+  /** @type {string[]} */
+  const problems = [];
+  const block = config?.env?.[env] ?? {};
+  if (env === "staging") {
+    if (block.vars?.AUTH_MODE !== "password") {
+      problems.push(
+        'wrangler.jsonc: env.staging.vars.AUTH_MODE must be "password". Add it back to the existing env.staging.vars object (add new keys beside it; never replace the object).',
+      );
+    }
+    if (block.assets?.run_worker_first !== true) {
+      problems.push(
+        "wrangler.jsonc: env.staging.assets.run_worker_first must be true, so every staging request goes through the password check.",
+      );
+    }
+    const required = block.secrets?.required;
+    if (!Array.isArray(required) || !required.includes("STAGING_PASSWORD")) {
+      problems.push(
+        'wrangler.jsonc: env.staging.secrets.required must include "STAGING_PASSWORD". Restore `"secrets": { "required": ["STAGING_PASSWORD"] }` in env.staging.',
+      );
+    }
+  } else {
+    if (block.vars?.AUTH_MODE !== "off") {
+      problems.push(
+        'wrangler.jsonc: env.production.vars.AUTH_MODE must be "off". Without it the production Worker treats itself as staging and asks for a password.',
+      );
+    }
+    const first = block.assets?.run_worker_first;
+    if (!Array.isArray(first) || !first.includes("/__auth/*")) {
+      problems.push(
+        'wrangler.jsonc: env.production.assets.run_worker_first must be an array that includes "/__auth/*", so the login override files are never served on production.',
+      );
+    }
+  }
+  return problems;
+}
+
+/**
  * @param {"staging" | "production"} env
  * @param {Deps} [deps]
  * @returns {Promise<string[]>}
@@ -40,6 +83,8 @@ export async function preflight(env, deps = realDeps) {
   if (!config.account_id) {
     problems.push("wrangler.jsonc has no account_id. Run `npm run setup` to set it.");
   }
+
+  problems.push(...authConfigProblems(config, env));
 
   if (!deps.envVars.CLOUDFLARE_API_TOKEN) {
     const who = await deps.run("npx", ["wrangler", "whoami", "--json"], { capture: true });

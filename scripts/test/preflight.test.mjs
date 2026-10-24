@@ -1,10 +1,29 @@
 import { describe, expect, it, vi } from "vitest";
 import { preflight } from "../preflight.mjs";
 
+function goodConfig(over = {}) {
+  return {
+    name: "acme",
+    account_id: "abc",
+    env: {
+      staging: {
+        assets: { run_worker_first: true },
+        vars: { AUTH_MODE: "password", AUTH_SESSION_HOURS: "168" },
+        secrets: { required: ["STAGING_PASSWORD"] },
+      },
+      production: {
+        assets: { run_worker_first: ["/__auth/*"] },
+        vars: { AUTH_MODE: "off" },
+      },
+    },
+    ...over,
+  };
+}
+
 function makeDeps(over = {}) {
   const calls = [];
   const deps = {
-    readWrangler: () => ({ name: "acme", account_id: "abc" }),
+    readWrangler: () => goodConfig(),
     nodeVersion: "26.12.0",
     envVars: {},
     run: vi.fn(async (cmd, args) => {
@@ -28,7 +47,7 @@ describe("preflight", () => {
 
   it("flags an unrenamed template", async () => {
     const { deps } = makeDeps({
-      readWrangler: () => ({ name: "cloudflare-website-template", account_id: "abc" }),
+      readWrangler: () => goodConfig({ name: "cloudflare-website-template" }),
     });
     const msgs = await preflight("production", deps);
     expect(msgs).toHaveLength(1);
@@ -36,7 +55,7 @@ describe("preflight", () => {
   });
 
   it("flags a missing account_id", async () => {
-    const { deps } = makeDeps({ readWrangler: () => ({ name: "acme" }) });
+    const { deps } = makeDeps({ readWrangler: () => goodConfig({ account_id: undefined }) });
     const msgs = await preflight("production", deps);
     expect(msgs).toHaveLength(1);
     expect(msgs[0]).toContain("account_id");
@@ -142,5 +161,83 @@ describe("preflight: secret list edge cases", () => {
     const { deps } = makeDeps({ run: secretRun({ code: 0, stdout: '{"a":1}', stderr: "" }) });
     const msgs = await preflight("staging", deps);
     expect(msgs[0]).toContain("Could not read the staging secret list");
+  });
+});
+
+describe("preflight: wrangler.jsonc auth config", () => {
+  /** @param {(c: any) => void} mutate */
+  function withConfig(mutate) {
+    const config = goodConfig();
+    mutate(config);
+    return makeDeps({ readWrangler: () => config }).deps;
+  }
+
+  it("the template's own wrangler.jsonc env blocks pass", async () => {
+    const { readWrangler } = await import("../lib/config.mjs");
+    const real = readWrangler();
+    const { deps } = makeDeps({ readWrangler: () => ({ ...real, name: "acme", account_id: "abc" }) });
+    expect(await preflight("staging", deps)).toEqual([]);
+    expect(await preflight("production", deps)).toEqual([]);
+  });
+
+  it("staging: flags a missing AUTH_MODE (vars replaced)", async () => {
+    const deps = withConfig((c) => {
+      c.env.staging.vars = { MY_VAR: "x" };
+    });
+    const msgs = await preflight("staging", deps);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]).toContain('env.staging.vars.AUTH_MODE must be "password"');
+  });
+
+  it("staging: flags run_worker_first not true", async () => {
+    const deps = withConfig((c) => {
+      c.env.staging.assets.run_worker_first = ["/__auth/*"];
+    });
+    const msgs = await preflight("staging", deps);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]).toContain("env.staging.assets.run_worker_first must be true");
+  });
+
+  it("staging: flags STAGING_PASSWORD missing from secrets.required", async () => {
+    const deps = withConfig((c) => {
+      delete c.env.staging.secrets;
+    });
+    const msgs = await preflight("staging", deps);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]).toContain("env.staging.secrets.required");
+  });
+
+  it("staging: a missing env.staging block reports all three", async () => {
+    const deps = withConfig((c) => {
+      delete c.env.staging;
+    });
+    expect(await preflight("staging", deps)).toHaveLength(3);
+  });
+
+  it("production: flags AUTH_MODE not \"off\"", async () => {
+    const deps = withConfig((c) => {
+      c.env.production.vars = { AUTH_MODE: "Off" };
+    });
+    const msgs = await preflight("production", deps);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]).toContain('env.production.vars.AUTH_MODE must be "off"');
+  });
+
+  it("production: flags run_worker_first without /__auth/*", async () => {
+    for (const value of [undefined, true, ["/api/*"]]) {
+      const deps = withConfig((c) => {
+        c.env.production.assets.run_worker_first = value;
+      });
+      const msgs = await preflight("production", deps);
+      expect(msgs).toHaveLength(1);
+      expect(msgs[0]).toContain('env.production.assets.run_worker_first must be an array that includes "/__auth/*"');
+    }
+  });
+
+  it("only checks the environment being published", async () => {
+    const deps = withConfig((c) => {
+      c.env.production.vars = {};
+    });
+    expect(await preflight("staging", deps)).toEqual([]);
   });
 });
