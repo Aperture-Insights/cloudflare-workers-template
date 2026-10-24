@@ -1,0 +1,39 @@
+# Opt-in deploy workflow. Disabled until the repository variable
+# DEPLOY_ENABLED is set to 'true'; until then every run is skipped.
+# Setup instructions: docs/github-actions.md
+name: Deploy
+
+on:
+  push:
+    branches: [main, staging]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy
+        type: choice
+        options: [staging, production]
+        default: staging
+
+jobs:
+  deploy:
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || (github.ref_name == 'main' && 'production' || 'staging') }}
+    concurrency:
+      group: deploy-${{ inputs.environment || (github.ref_name == 'main' && 'production' || 'staging') }}
+      cancel-in-progress: false
+    env:
+      TARGET_ENV: ${{ inputs.environment || (github.ref_name == 'main' && 'production' || 'staging') }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run check
+      - name: Publish
+        run: npm run "publish:$TARGET_ENV" -- --yes
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
